@@ -1,72 +1,55 @@
 from uuid import UUID
 
+from app.repositories.ticket_repository import TicketRepository
 from app.schemas.ticket import (
     CreateTicketRequest,
-    TicketResponse,
     UpdateTicketRequest,
 )
 
-# In-memory storage
-tickets: list[TicketResponse] = []
+
+async def create_ticket(
+    repo: TicketRepository,
+    ticket: CreateTicketRequest,
+):
+    return await repo.create(ticket)
 
 
-def create_ticket(ticket: CreateTicketRequest) -> TicketResponse:
-    new_ticket = TicketResponse(
-        title=ticket.title,
-        priority=ticket.priority,
-    )
-
-    tickets.append(new_ticket)
-    return new_ticket
-
-
-def get_tickets(
+async def get_tickets(
+    repo: TicketRepository,
     status: str | None = None,
     priority: str | None = None,
-) -> list[TicketResponse]:
-
-    results = tickets
-
-    if status:
-        results = [t for t in results if t.status == status]
-
-    if priority:
-        results = [t for t in results if t.priority == priority]
-
-    return results
+):
+    return await repo.get_all(status, priority)
 
 
-def get_ticket(ticket_id: UUID) -> TicketResponse | None:
-    for ticket in tickets:
-        if ticket.id == ticket_id:
-            return ticket
-    return None
+async def get_ticket(
+    repo: TicketRepository,
+    ticket_id: UUID,
+):
+    return await repo.get_by_id(ticket_id)
 
 
-def update_ticket(
+async def update_ticket(
+    repo: TicketRepository,
     ticket_id: UUID,
     update: UpdateTicketRequest,
-) -> TicketResponse | None:
-
-    ticket = get_ticket(ticket_id)
+):
+    ticket = await repo.get_by_id(ticket_id)
 
     if ticket is None:
         return None
 
-    data = update.model_dump(exclude_unset=True)
-
-    for key, value in data.items():
-        setattr(ticket, key, value)
-
-    return ticket
+    return await repo.update(ticket, update)
 
 
-def delete_ticket(ticket_id: UUID) -> bool:
-
-    ticket = get_ticket(ticket_id)
+async def delete_ticket(
+    repo: TicketRepository,
+    ticket_id: UUID,
+):
+    ticket = await repo.get_by_id(ticket_id)
 
     if ticket is None:
         return False
 
-    tickets.remove(ticket)
+    await repo.delete(ticket)
     return True

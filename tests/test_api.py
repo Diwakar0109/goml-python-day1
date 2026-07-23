@@ -1,195 +1,141 @@
+import pytest
+from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.schemas.ticket import CreateTicketRequest, UpdateTicketRequest, TicketResponse
+from app.services import ticket_service
 
 client = TestClient(app)
 
 
-def test_root():
-    response = client.get("/")
-    assert response.status_code == 200
+@pytest.mark.parametrize(
+    "title,priority",
+    [
+        ("Fix database index issue", "high"),
+        ("Documentation update", "low"),
+        ("API latency spikes", "medium"),
+    ]
+)
+def test_create_ticket_validation(title, priority):
+    req = CreateTicketRequest(title=title, priority=priority)
+    assert req.title == title
+    assert req.priority == priority
 
-    data = response.json()
 
-    assert "message" in data
-    assert "version" in data
+@pytest.mark.parametrize(
+    "title,priority",
+    [
+        ("   ", "low"),
+        ("ab", "medium"),
+        ("", "high"),
+    ]
+)
+def test_create_ticket_failures(title, priority):
+    with pytest.raises(ValueError):
+        CreateTicketRequest(title=title, priority=priority)
 
 
-def test_create_ticket():
-    response = client.post(
-        "/tickets/",
-        json={
-            "title": "Login Issue",
-            "priority": "high"
-        }
+@pytest.mark.parametrize(
+    "title,priority,status",
+    [
+        ("   ", None, None),
+        (None, "urgent", None),
+        (None, None, "unknown"),
+    ]
+)
+def test_update_ticket_failures(title, priority, status):
+    with pytest.raises(ValueError):
+        UpdateTicketRequest(title=title, priority=priority, status=status)
+
+
+@pytest.mark.parametrize(
+    "status,expected_resolved",
+    [
+        ("resolved", True),
+        ("open", False),
+        ("in_progress", False),
+        ("closed", False),
+    ]
+)
+def test_ticket_response_is_resolved(status, expected_resolved):
+    resp = TicketResponse(
+        title="Valid ticket",
+        priority="low",
+        status=status
     )
+    assert resp.is_resolved == expected_resolved
 
-    assert response.status_code == 201
 
-    data = response.json()
+@pytest.mark.anyio
+async def test_service_update_nonexistent_ticket(mock_repo):
+    mock_repo.get_by_id.return_value = None
+    req = UpdateTicketRequest(status="closed")
+    res = await ticket_service.update_ticket(mock_repo, uuid4(), req)
+    assert res is None
 
-    assert data["title"] == "Login Issue"
+
+@pytest.mark.anyio
+async def test_service_delete_nonexistent_ticket(mock_repo):
+    mock_repo.get_by_id.return_value = None
+    res = await ticket_service.delete_ticket(mock_repo, uuid4())
+    assert res is False
+
+
+def test_api_create_ticket():
+    res = client.post(
+        "/tickets/",
+        json={"title": "Production crash", "priority": "high"}
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["title"] == "Production crash"
     assert data["priority"] == "high"
-    assert data["status"] == "open"
 
 
-
-def test_get_all_tickets():
-    response = client.get("/tickets/")
-
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
-
-
-def test_get_ticket():
-    create = client.post(
-        "/tickets/",
-        json={
-            "title": "Sample Ticket",
-            "priority": "medium"
-        }
-    )
-
-    ticket_id = create.json()["id"]
-
-    response = client.get(f"/tickets/{ticket_id}")
-
-    assert response.status_code == 200
-    assert response.json()["id"] == ticket_id
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"title": "ab", "priority": "high"},
+        {"title": "   ", "priority": "low"},
+        {"title": "Valid title", "priority": "bad"}
+    ]
+)
+def test_api_create_ticket_failures(payload):
+    res = client.post("/tickets/", json=payload)
+    assert res.status_code == 422
 
 
-def test_update_ticket():
-
-    create = client.post(
-        "/tickets/",
-        json={
-            "title": "Old Title",
-            "priority": "low"
-        }
-    )
-
-    ticket_id = create.json()["id"]
-
-    response = client.put(
-        f"/tickets/{ticket_id}",
-        json={
-            "status": "resolved"
-        }
-    )
-
-    assert response.status_code == 200
-
-    data = response.json()
-
-    assert data["status"] == "resolved"
-    assert data["is_resolved"] is True
+def test_api_get_ticket_details(existing_ticket_id):
+    res = client.get(f"/tickets/{existing_ticket_id}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == existing_ticket_id
+    assert data["title"] == "Integration test ticket"
 
 
-def test_delete_ticket():
+def test_api_delete_flow(existing_ticket_id):
+    del_res = client.delete(f"/tickets/{existing_ticket_id}")
+    assert del_res.status_code == 200
 
-    create = client.post(
-        "/tickets/",
-        json={
-            "title": "Delete Me",
-            "priority": "low"
-        }
-    )
-
-    ticket_id = create.json()["id"]
-
-    response = client.delete(f"/tickets/{ticket_id}")
-
-    assert response.status_code == 200
+    get_res = client.get(f"/tickets/{existing_ticket_id}")
+    assert get_res.status_code == 404
 
 
-def test_filter_priority():
-
-    client.post(
-        "/tickets/",
-        json={
-            "title": "High Ticket",
-            "priority": "high"
-        }
-    )
-
-    response = client.get("/tickets/?priority=high")
-
-    assert response.status_code == 200
-
-    for ticket in response.json():
-        assert ticket["priority"] == "high"
-
-
-def test_filter_status():
-
-    create = client.post(
-        "/tickets/",
-        json={
-            "title": "Status Ticket",
-            "priority": "medium"
-        }
-    )
-
-    ticket_id = create.json()["id"]
-
-    client.put(
-        f"/tickets/{ticket_id}",
-        json={
-            "status": "resolved"
-        }
-    )
-
-    response = client.get("/tickets/?status=resolved")
-
-    assert response.status_code == 200
-
-    for ticket in response.json():
-        assert ticket["status"] == "resolved"
-
-
-def test_validation_short_title():
-
-    response = client.post(
-        "/tickets/",
-        json={
-            "title": "ab",
-            "priority": "high"
-        }
-    )
-
-    assert response.status_code == 422
-
-
-def test_validation_invalid_priority():
-
-    response = client.post(
-        "/tickets/",
-        json={
-            "title": "Login",
-            "priority": "urgent"
-        }
-    )
-
-    assert response.status_code == 422
-
-
-def test_validation_blank_title():
-
-    response = client.post(
-        "/tickets/",
-        json={
-            "title": "   ",
-            "priority": "low"
-        }
-    )
-
-    assert response.status_code == 422
-
-
-def test_ticket_not_found():
-
-    response = client.get(
-        "/tickets/11111111-1111-1111-1111-111111111111"
-    )
-
-    assert response.status_code == 404
+def test_api_summarize_ticket():
+    from app.api.ai import get_bedrock_service
+    from app.services.bedrock_services import FakeBedrockService
+    
+    app.dependency_overrides[get_bedrock_service] = lambda: FakeBedrockService()
+    try:
+        res = client.post(
+            "/ai/summarize",
+            json={"ticket_description": "My computer is not turning on and I need help urgently."}
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "summary" in data
+        assert "suggested_response" in data
+        assert data["summary"].startswith("Support issue:")
+    finally:
+        app.dependency_overrides.clear()

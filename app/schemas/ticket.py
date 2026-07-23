@@ -10,6 +10,7 @@ from typing_extensions import Literal
 class CreateTicketRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)
     priority: Literal["low", "medium", "high"] = "medium"
+    assignee_email: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -24,9 +25,9 @@ class UpdateTicketRequest(BaseModel):
     title: Optional[str] = None
     priority: Optional[Literal["low", "medium", "high"]] = None
     status: Optional[
-        Literal["open", "in_progress", "resolved"]
+        Literal["open", "in_progress", "resolved", "closed"]
     ] = None
-    assignee: Optional[str] = None
+    assignee_email: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -48,12 +49,22 @@ class TicketResponse(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     title: str
     priority: Literal["low", "medium", "high"]
-    status: Literal["open", "in_progress", "resolved"] = "open"
+    status: Literal["open","in_progress","resolved","closed",] = "open"
     created_at: datetime = Field(
-    default_factory=lambda: datetime.now(UTC)
-)
+        default_factory=lambda: datetime.now(UTC)
+    )
+    assignee_email: Optional[str] = None
 
     @computed_field
     @property
     def is_resolved(self) -> bool:
         return self.status == "resolved"
+
+
+class SummarizeRequest(BaseModel):
+    ticket_description: str = Field(min_length=10, max_length=5_000)
+
+
+class SummarizeResponse(BaseModel):
+    summary: str
+    suggested_response: str

@@ -1,8 +1,10 @@
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.deps import get_repo
+from app.repositories.ticket_repository import TicketRepository
 from app.schemas.ticket import (
     CreateTicketRequest,
     TicketResponse,
@@ -23,21 +25,28 @@ router = APIRouter(
 
 
 @router.post("/", response_model=TicketResponse, status_code=201)
-def create(request: CreateTicketRequest):
-    return create_ticket(request)
+async def create(
+    request: CreateTicketRequest,
+    repo: TicketRepository = Depends(get_repo),
+):
+    return await create_ticket(repo, request)
 
 
 @router.get("/", response_model=list[TicketResponse])
-def list_tickets(
+async def list_tickets(
     status: Optional[str] = None,
     priority: Optional[str] = None,
+    repo: TicketRepository = Depends(get_repo),
 ):
-    return get_tickets(status, priority)
+    return await get_tickets(repo, status, priority)
 
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
-def get(ticket_id: UUID):
-    ticket = get_ticket(ticket_id)
+async def get(
+    ticket_id: UUID,
+    repo: TicketRepository = Depends(get_repo),
+):
+    ticket = await get_ticket(repo, ticket_id)
 
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -46,8 +55,12 @@ def get(ticket_id: UUID):
 
 
 @router.put("/{ticket_id}", response_model=TicketResponse)
-def update(ticket_id: UUID, request: UpdateTicketRequest):
-    ticket = update_ticket(ticket_id, request)
+async def update(
+    ticket_id: UUID,
+    request: UpdateTicketRequest,
+    repo: TicketRepository = Depends(get_repo),
+):
+    ticket = await update_ticket(repo, ticket_id, request)
 
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -56,10 +69,14 @@ def update(ticket_id: UUID, request: UpdateTicketRequest):
 
 
 @router.delete("/{ticket_id}")
-def delete(ticket_id: UUID):
-    success = delete_ticket(ticket_id)
+async def delete(
+    ticket_id: UUID,
+    repo: TicketRepository = Depends(get_repo),
+):
+    success = await delete_ticket(repo, ticket_id)
 
     if not success:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     return {"message": "Ticket deleted successfully"}
+
