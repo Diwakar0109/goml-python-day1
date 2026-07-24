@@ -24,7 +24,9 @@ class TicketRepository:
         self,
         status: str | None = None,
         priority: str | None = None,
-    ):
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Ticket]:
         query = select(Ticket)
 
         if status:
@@ -33,13 +35,12 @@ class TicketRepository:
         if priority:
             query = query.where(Ticket.priority == priority)
 
-        result = await self.db.execute(
-            query.order_by(Ticket.created_at.desc())
-        )
+        query = query.order_by(Ticket.created_at.desc()).offset(skip).limit(limit)
 
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def update(self, ticket, payload) -> Ticket:
+    async def update(self, ticket: Ticket, payload) -> Ticket:
         for field, value in payload.model_dump(
             exclude_unset=True
         ).items():
@@ -47,9 +48,8 @@ class TicketRepository:
 
         await self.db.flush()
         await self.db.refresh(ticket)
-
         return ticket
 
-    async def delete(self, ticket) -> None:
+    async def delete(self, ticket: Ticket) -> None:
         await self.db.delete(ticket)
         await self.db.flush()

@@ -18,8 +18,10 @@ async def get_tickets(
     repo: TicketRepository,
     status: str | None = None,
     priority: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
 ):
-    return await repo.get_all(status, priority)
+    return await repo.get_all(status=status, priority=priority, skip=skip, limit=limit)
 
 
 async def get_ticket(

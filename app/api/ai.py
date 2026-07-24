@@ -29,4 +29,4 @@ def summarize_ticket(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The AI service is temporarily unavailable",
-        ) from exc
+        ) from exc 

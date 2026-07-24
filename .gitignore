@@ -9,3 +9,10 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Coverage and profile outputs
+htmlcov/
+.coverage
+*.prof
+
+

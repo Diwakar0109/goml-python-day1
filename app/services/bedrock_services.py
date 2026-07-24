@@ -1,29 +1,32 @@
 from __future__ import annotations
- 
+
 import json
+import logging
 import os
 from typing import Any
- 
+
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
- 
+
 from app.services.prompt_templates import TICKET_SUMMARY_V1
- 
+
 from dotenv import load_dotenv
 load_dotenv()
- 
- 
+
+logger = logging.getLogger(__name__)
+
+
 class BedrockServiceError(RuntimeError):
     pass
- 
- 
+
+
 class BedrockService:
     """Wrapper around the Amazon Bedrock Converse API.
- 
+
     The boto3 client is injectable, allowing deterministic unit tests without
     live network calls or model cost.
     """
- 
+
     def __init__(
         self,
         client: Any | None = None,
@@ -35,7 +38,7 @@ class BedrockService:
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
             region_name=os.getenv("AWS_REGION"),
         )
- 
+
     def summarize_ticket(self, ticket_description: str) -> dict[str, str]:
         prompt = TICKET_SUMMARY_V1.render(
             ticket_description=ticket_description,
@@ -55,10 +58,11 @@ class BedrockService:
                 },
             )
         except (BotoCoreError, ClientError) as exc:
+            logger.error("Bedrock request failed: %s", exc)
             raise BedrockServiceError("Bedrock request failed") from exc
- 
+
         try:
-            print(response)
+            logger.debug("Raw Bedrock response: %s", response)
             text = response["output"]["message"]["content"][0]["text"]
             text = text.strip()
             if text.startswith("```"):
@@ -66,20 +70,19 @@ class BedrockService:
                 text = text.strip()
             parsed = json.loads(text)
             
-            print("############")
-            print(text)
-            print("############")
+            logger.debug("Parsed Bedrock JSON output: %s", text)
             return {
                 "summary": str(parsed["summary"]),
                 "suggested_response": str(parsed["suggested_response"]),
             }
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            logger.error("Failed to parse Bedrock JSON response: %s", exc)
             raise BedrockServiceError("Bedrock returned an invalid response") from exc
- 
- 
+
+
 class FakeBedrockService:
     """Offline deterministic implementation for classroom demonstrations."""
- 
+
     def summarize_ticket(self, ticket_description: str) -> dict[str, str]:
         short_description = ticket_description.strip()[:70]
         return {

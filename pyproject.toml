@@ -1,7 +1,7 @@
 [project]
 name = "t1"
 version = "0.1.0"
-description = "Add your description here"
+description = "FastAPI Ticket Service"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.139.2",
     "psycopg2-binary>=2.9.12",
     "pydantic-settings>=2.14.2",
+    "pyyaml>=6.0.3",
     "sqlalchemy>=2.0.51",
     "uvicorn>=0.51.0",
 ]
@@ -18,5 +19,14 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "locust>=2.46.1",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "python-docx>=1.2.0",
+    "reportlab>=5.0.0",
+    "snakeviz>=2.2.2",
 ]
+
+[tool.pytest.ini_options]
+addopts = "--cov=app --cov-report=term-missing --cov-report=html"
+testpaths = ["tests"]

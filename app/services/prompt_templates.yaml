@@ -1,0 +1,7 @@
+ticket_summary_v1:
+  name: "ticket_summary"
+  version: "1.0.0"
+  template: >-
+    Return only valid JSON with keys summary and suggested_response.
+    Summarize the following support ticket and suggest a concise,
+    professional response. Ticket: {ticket_description}
